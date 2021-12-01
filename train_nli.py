@@ -16,6 +16,7 @@ from datasets import load_dataset
 from datasets.arrow_dataset import concatenate_datasets
 
 # Transformers
+import torch
 from sentence_transformers import models, losses, datasets
 from sentence_transformers.evaluation import EmbeddingSimilarityEvaluator
 from sentence_transformers import (
@@ -77,7 +78,6 @@ class STransformerNLITrainer:
         self.train_data = {}
         self.train_samples = []
         self.dev_samples = []
-        self.test_samples = []
         self.all_nli = None
         self.sts_validation = None
         self.sts_test = None
@@ -116,6 +116,8 @@ class STransformerNLITrainer:
             self.all_nli = concatenate_datasets(nli_datasets)
         else:
             self.all_nli = nli_datasets[0]
+
+        self.all_nli = self.all_nli.shuffle()
 
         # Set max train examples
         if self.max_train_examples:
@@ -222,14 +224,15 @@ class STransformerNLITrainer:
     def evaluate(self, model_dir: str = None):
         logger.info("===================== Running evaluation =====================")
         logger.info("\tPreparing test data")
+        test_samples = []
         for row in self.sts_test.iterrows():
             score = float(row[1]["score"]) / 5  # Normalize
-            self.test_samples.append(
+            test_samples.append(
                 InputExample(
                     texts=[row[1]["sentence1_tr"], row[1]["sentence2_tr"]], label=score
                 )
             )
-        logging.info(f"\tTest samples: {len(self.test_samples)}")
+        logging.info(f"\tTest samples: {len(test_samples)}")
 
         if not model_dir:
             model_dir = self.output_dir
@@ -237,16 +240,16 @@ class STransformerNLITrainer:
         logger.info(f"\tLoading SentenceTransformer from: {model_dir}")
         model = SentenceTransformer(model_dir)
         test_evaluator = EmbeddingSimilarityEvaluator.from_input_examples(
-            self.test_samples, batch_size=self.batch_size
+            test_samples, batch_size=self.batch_size
         )
         test_evaluator(model, output_path=model_dir)
 
 
 if __name__ == "__main__":
     trainer = STransformerNLITrainer(
-        checkpoint="dbmdz/bert-base-turkish-cased",
-        epochs=10,
-        batch_size=128,
+        checkpoint="dbmdz/bert-base-turkish-uncased",
+        epochs=5,
+        batch_size=32,
     )
     trainer.train()
     trainer.evaluate()
