@@ -8,6 +8,7 @@ import math
 import random
 import logging
 import requests
+import argparse
 from typing import Optional, List
 
 # Data processing
@@ -25,6 +26,7 @@ from sentence_transformers import (
     LoggingHandler,
 )
 
+import wandb
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -34,6 +36,8 @@ logging.basicConfig(
     level=logging.INFO,
     handlers=[LoggingHandler()],
 )
+wandb.init(project="sbert-turkish", entity="emrecncelik")
+
 STS_URLS = {
     "train": "https://raw.githubusercontent.com/emrecncelik/sts-benchmark-tr/main/sts-train-tr.csv",
     "dev": "https://raw.githubusercontent.com/emrecncelik/sts-benchmark-tr/main/sts-dev-tr.csv",
@@ -83,11 +87,9 @@ class STransformerNLITrainer:
         self.sts_test = None
 
         if not output_dir:
-            self.output_dir = "_".join(
-                [self.checkpoint.replace("/", "_"), "stransformer"]
-            )
+            self.output_dir = "_".join([self.checkpoint.replace("/", "_"), "mean-nli"])
         else:
-            dir = "_".join([checkpoint.replace("/", "_"), "stransformer"])
+            dir = "_".join([checkpoint.replace("/", "_"), "mean-nli"])
             self.output_dir = os.path.join(self.output_dir, dir)
 
         self.prepare_for_training()
@@ -246,10 +248,59 @@ class STransformerNLITrainer:
 
 
 if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(
+        description="Fine-tune transformers on Turkish NLI data"
+    )
+    parser.add_argument(
+        "-m",
+        "--model",
+        help="Name or path of the model checkpoint",
+        required=True,
+    )
+    parser.add_argument(
+        "-b",
+        "--batch_size",
+        help="Training and evaluation batch size",
+        required=False,
+        default=32,
+        type=int,
+    )
+    parser.add_argument(
+        "-t",
+        "--max_train_examples",
+        help="Maximum num. of training examples",
+        required=False,
+        default=None,
+        type=int,
+    )
+    parser.add_argument(
+        "-e",
+        "--max_eval_examples",
+        help="Maximum num. of evaluation examples",
+        required=False,
+        default=None,
+        type=int,
+    )
+    parser.add_argument(
+        "-o",
+        "--output_dir",
+        help="Directory for model output",
+        required=False,
+        default="",
+        type=str,
+    )
+    args = vars(parser.parse_args())
+
+    model = args["model"]
+
     trainer = STransformerNLITrainer(
-        checkpoint="dbmdz/bert-base-turkish-uncased",
+        checkpoint=model,
         epochs=5,
-        batch_size=32,
+        batch_size=args["batch_size"],
+        output_dir=args["output_dir"],
+        max_train_examples=args["max_train_examples"],
+        max_eval_examples=args["max_eval_examples"],
     )
     trainer.train()
     trainer.evaluate()
